@@ -298,14 +298,32 @@ function PillPicker({ options, value, onChange }) {
 /* ---------------------------------------------------------------------- */
 /* HOME                                                                    */
 /* ---------------------------------------------------------------------- */
-function HomeScreen({ project, items, tasks, boxes, activity, members, onSeeTasks, onSeeThings, onOpenTeam, onEditTrip, onToggleTask }) {
-  const daysLeft = Math.max(0, Math.ceil((new Date(project.movingDate) - new Date()) / 86400000));
+function HomeScreen({ project, items, tasks, boxes, sales, activity, members, onSeeTasks, onSeeThings, onOpenTeam, onEditTrip, onToggleTask, onOpenDecisionCenter, onGoSales, onGoBoxes }) {
+  const daysLeft = Math.max(0, Math.ceil((new Date(project.movingDate + "T00:00:00") - new Date()) / 86400000));
   const decided = items.filter((i) => i.decision !== "Sin decidir").length;
   const doneTasks = tasks.filter((t) => t.done).length;
   const readyBoxes = boxes.filter((b) => b.status === "Cerrada" || b.status === "Transportada").length;
+  const toDecideCount = items.filter((i) => i.decision === "Sin decidir").length;
+  const toSellCount = items.filter((i) => i.decision === "Vender").length + sales.length;
+  const toKeepCount = items.filter((i) => i.decision === "Me llevo").length;
   const pct = Math.round(((decided / Math.max(1, items.length)) + (doneTasks / Math.max(1, tasks.length)) + (readyBoxes / Math.max(1, boxes.length))) / 3 * 100);
   const nextTasks = tasks.filter((t) => !t.done).slice(0, 2);
-  const suggestPending = items.length - decided;
+  const pendingTasksCount = tasks.length - doneTasks;
+  const nothingToDo = items.length > 0 && tasks.length > 0 && toDecideCount === 0 && pendingTasksCount === 0;
+  let aiSummary;
+  if (items.length === 0 && tasks.length === 0) {
+    aiSummary = { title: "Empecemos.", body: "Agrega tus primeras cosas y tareas para que te ayudemos a organizarte." };
+  } else if (nothingToDo) {
+    aiSummary = { title: "¡Todo al día!", body: "No tienes objetos por decidir ni tareas pendientes por ahora." };
+  } else {
+    const itemsToSuggest = Math.min(8, toDecideCount);
+    const tasksToSuggest = Math.min(4, pendingTasksCount);
+    const parts = [];
+    if (itemsToSuggest > 0) parts.push(`resolver ${itemsToSuggest} objeto${itemsToSuggest === 1 ? "" : "s"}`);
+    if (tasksToSuggest > 0) parts.push(`completar ${tasksToSuggest} tarea${tasksToSuggest === 1 ? "" : "s"}`);
+    const title = pct >= 70 ? "Vas muy bien." : pct >= 35 ? "Vas bien." : "Recién arrancando.";
+    aiSummary = { title, body: `Esta semana intenta ${parts.join(" y ")}.` };
+  }
 
   return (
     <div className="pb-4">
@@ -326,23 +344,24 @@ function HomeScreen({ project, items, tasks, boxes, activity, members, onSeeTask
         </button>
       </div>
 
-      {/* hero photos */}
+      {/* accesos directos */}
       <div className="mt-6 px-5 flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
         {[
-          { key: "sofa", tag: "Decidir", tone: C.grey },
-          { key: "desk", tag: "Vender", tone: C.peach },
-          { key: "coffee", tag: "Llevar", tone: C.mint },
-          { key: "box1", tag: "Empacado", tone: C.sky },
-        ].map((p, idx) => (
-          <div key={p.key} className="relative shrink-0" style={{ marginTop: idx % 2 ? 14 : 0 }}>
-            <img src={photoUrl(p.key, 220, 220)} alt="" className="w-28 h-32 object-cover rounded-[22px]" />
-            <span
-              className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap"
-              style={{ background: p.tone.solid, color: "#fff" }}
-            >
-              {p.tag}
-            </span>
-          </div>
+          { key: "decidir", label: "Decidir", icon: HelpCircle, tone: C.grey, count: toDecideCount, onClick: onOpenDecisionCenter },
+          { key: "vender", label: "Vender", icon: DollarSign, tone: C.peach, count: toSellCount, onClick: onGoSales },
+          { key: "llevar", label: "Llevar", icon: Heart, tone: C.mint, count: toKeepCount, onClick: onSeeThings },
+          { key: "cajas", label: "Cajas", icon: BoxIcon, tone: C.sky, count: boxes.length, onClick: onGoBoxes },
+        ].map((s) => (
+          <button
+            key={s.key}
+            onClick={s.onClick}
+            className="shrink-0 w-24 flex flex-col items-center gap-2 py-4 rounded-[22px] active:scale-95 transition-transform"
+            style={{ background: s.tone.bg }}
+          >
+            <s.icon size={20} style={{ color: s.tone.fg }} />
+            <span className="text-sm font-bold" style={{ color: s.tone.fg }}>{s.label}</span>
+            <span className="text-[11px] font-semibold" style={{ color: s.tone.fg, opacity: 0.75 }}>{s.count}</span>
+          </button>
         ))}
       </div>
 
@@ -373,7 +392,7 @@ function HomeScreen({ project, items, tasks, boxes, activity, members, onSeeTask
       <div className="mx-5 mt-4 p-4 rounded-[22px] flex gap-3 items-start" style={{ background: C.mint.bg }}>
         <Sparkles size={18} style={{ color: C.mint.fg, marginTop: 2 }} />
         <p className="text-sm leading-snug" style={{ color: C.mint.fg }}>
-          <span className="font-bold">Vas bien.</span> Esta semana intenta resolver {Math.min(8, Math.max(0, suggestPending))} objetos y completar {Math.max(1, tasks.length - doneTasks > 3 ? 4 : tasks.length - doneTasks)} tareas.
+          <span className="font-bold">{aiSummary.title}</span> {aiSummary.body}
         </p>
       </div>
 
@@ -433,12 +452,10 @@ function HomeScreen({ project, items, tasks, boxes, activity, members, onSeeTask
 /* EDITAR VIAJE                                                            */
 /* ---------------------------------------------------------------------- */
 function EditTripSheet({ open, onClose, project, onSave }) {
-  const toInputDate = (d) => {
-    const dt = new Date(d);
-    const off = dt.getTimezoneOffset();
-    const local = new Date(dt.getTime() - off * 60000);
-    return local.toISOString().slice(0, 10);
-  };
+  // project.movingDate ya viene como "YYYY-MM-DD" (columna `date` de Postgres),
+  // así que lo usamos directo. Convertirlo a Date y volver con toISOString()
+  // restaba horas por el huso horario y mostraba un día menos en Argentina.
+  const toInputDate = (d) => (typeof d === "string" ? d.slice(0, 10) : new Date(d).toISOString().slice(0, 10));
   const [origin, setOrigin] = useState(project.origin);
   const [destination, setDestination] = useState(project.destination);
   const [date, setDate] = useState(toInputDate(project.movingDate));
@@ -728,7 +745,7 @@ function ThingsScreen({ items, onOpenAdd, onDecisionCenter, onOpenItem }) {
 /* ---------------------------------------------------------------------- */
 /* TAREAS                                                                  */
 /* ---------------------------------------------------------------------- */
-function TasksScreen({ tasks, members, onToggle, meName }) {
+function TasksScreen({ tasks, members, onToggle, onOpenTask, meName }) {
   const [tab, setTab] = useState("Todas");
   const tabs = ["Para mí", "Todas", "Próximas", "Completadas"];
   const filtered = tasks.filter((t) => {
@@ -756,14 +773,14 @@ function TasksScreen({ tasks, members, onToggle, meName }) {
               <button onClick={() => onToggle(t.id)}>
                 {t.done ? <CheckCircle2 size={22} style={{ color: C.mint.fg }} /> : <Circle size={22} style={{ color: C.sub }} />}
               </button>
-              <div className="flex-1 min-w-0">
+              <button onClick={() => onOpenTask(t)} className="flex-1 min-w-0 text-left">
                 <p className="text-sm font-semibold truncate" style={{ color: t.done ? C.sub : C.ink, textDecoration: t.done ? "line-through" : "none" }}>{t.title}</p>
                 {t.done ? (
                   <p className="text-xs" style={{ color: C.sub }}>{t.completedNote}</p>
                 ) : (
                   <p className="text-xs" style={{ color: C.sub }}>{t.category} · vence {t.due}</p>
                 )}
-              </div>
+              </button>
               {!t.done && (
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: priorityTone[t.priority].bg, color: priorityTone[t.priority].fg }}>
                   {t.priority}
@@ -775,6 +792,53 @@ function TasksScreen({ tasks, members, onToggle, meName }) {
         </div>
       )}
     </div>
+  );
+}
+
+function TaskDetailSheet({ task, onClose, onUpdate, onToggle, onDelete }) {
+  const [title, setTitle] = useState("");
+
+  useEffect(() => {
+    setTitle(task?.title || "");
+  }, [task?.id]);
+
+  if (!task) return <BottomSheet open={false} onClose={onClose} />;
+
+  return (
+    <BottomSheet open={!!task} onClose={onClose} title="Editar tarea">
+      <div className="space-y-4">
+        <div>
+          <FieldLabel>Título</FieldLabel>
+          <TextInput
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={() => title.trim() && title.trim() !== task.title && onUpdate(task.id, { title: title.trim() })}
+          />
+        </div>
+        <div>
+          <FieldLabel>Categoría</FieldLabel>
+          <PillPicker options={TASK_CATEGORIES} value={task.category} onChange={(v) => onUpdate(task.id, { category: v })} />
+        </div>
+        <div>
+          <FieldLabel>Prioridad</FieldLabel>
+          <PillPicker options={PRIORITIES} value={task.priority} onChange={(v) => onUpdate(task.id, { priority: v })} />
+        </div>
+        <button
+          onClick={() => onToggle(task.id)}
+          className="w-full py-3 rounded-full text-sm font-semibold flex items-center justify-center gap-2"
+          style={{ background: task.done ? C.line : C.mint.bg, color: task.done ? C.ink : C.mint.fg }}
+        >
+          {task.done ? (<><Circle size={16} /> Marcar como pendiente</>) : (<><CheckCircle2 size={16} /> Marcar como completada</>)}
+        </button>
+        <button
+          onClick={() => onDelete(task.id)}
+          className="w-full py-3 rounded-full text-sm font-semibold flex items-center justify-center gap-2"
+          style={{ background: C.peach.bg, color: C.peach.fg }}
+        >
+          <Trash2 size={15} /> Eliminar tarea
+        </button>
+      </div>
+    </BottomSheet>
   );
 }
 
@@ -845,6 +909,7 @@ function BoxDetail({ box, members, onClose }) {
 /* VENTAS                                                                   */
 /* ---------------------------------------------------------------------- */
 const saleStatusTone = { "Pendiente": C.grey, "Sacar fotos": C.yellow, "Publicar": C.yellow, "Publicado": C.sky, "Reservado": C.lilac, "Vendido": C.mint };
+const SALE_ENTRY_STATUSES = ["Pendiente", "Sacar fotos", "Publicar", "Publicado", "Reservado", "Vendido"];
 const money = (n) => n == null ? "—" : `$${n.toLocaleString("es-AR")}`;
 
 function itemsToSaleEntries(items) {
@@ -861,7 +926,7 @@ function itemsToSaleEntries(items) {
     }));
 }
 
-function SalesScreen({ sales, items, onBack, onOpenAdd }) {
+function SalesScreen({ sales, items, onBack, onOpenAdd, onOpenItem, onOpenSale }) {
   const combined = [...itemsToSaleEntries(items), ...sales];
   const conseguido = combined.filter((s) => s.status === "Vendido").reduce((a, s) => a + (s.listed || 0), 0);
   const estimado = combined.reduce((a, s) => a + (s.estimated || s.listed || 0), 0);
@@ -886,7 +951,12 @@ function SalesScreen({ sales, items, onBack, onOpenAdd }) {
       ) : (
         <div className="px-5 space-y-3">
           {combined.map((s) => (
-            <div key={s.id} className="p-4 rounded-[22px] flex items-center gap-3" style={{ background: C.card }}>
+            <button
+              key={s.id}
+              onClick={() => (s.fromItem ? onOpenItem(items.find((i) => `item-${i.id}` === s.id)) : onOpenSale(s))}
+              className="w-full text-left p-4 rounded-[22px] flex items-center gap-3 active:scale-[0.98] transition-transform"
+              style={{ background: C.card }}
+            >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold" style={{ color: C.ink }}>{s.item}</p>
                 <p className="text-xs" style={{ color: C.sub }}>
@@ -894,11 +964,65 @@ function SalesScreen({ sales, items, onBack, onOpenAdd }) {
                 </p>
               </div>
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: saleStatusTone[s.status].bg, color: saleStatusTone[s.status].fg }}>{s.status}</span>
-            </div>
+              <ChevronRight size={16} style={{ color: C.sub }} className="shrink-0" />
+            </button>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function SaleDetailSheet({ sale, onClose, onUpdate, onDelete }) {
+  const [estimated, setEstimated] = useState("");
+  const [listed, setListed] = useState("");
+
+  useEffect(() => {
+    setEstimated(sale?.estimated != null ? String(sale.estimated) : "");
+    setListed(sale?.listed != null ? String(sale.listed) : "");
+  }, [sale?.id]);
+
+  if (!sale) return <BottomSheet open={false} onClose={onClose} />;
+
+  return (
+    <BottomSheet open={!!sale} onClose={onClose} title={sale.item}>
+      <div>
+        <p className="text-sm mb-4" style={{ color: C.sub }}>{sale.room} · registrado por {sale.by}</p>
+        <div className="mb-4">
+          <FieldLabel>Precio estimado</FieldLabel>
+          <TextInput
+            type="number" inputMode="numeric" value={estimated}
+            onChange={(e) => setEstimated(e.target.value)}
+            onBlur={() => onUpdate(sale.id, { estimated: estimated === "" ? null : Number(estimated) })}
+          />
+        </div>
+        <div className="mb-4">
+          <FieldLabel>Precio publicado / de venta</FieldLabel>
+          <TextInput
+            type="number" inputMode="numeric" value={listed}
+            onChange={(e) => setListed(e.target.value)}
+            onBlur={() => onUpdate(sale.id, { listed: listed === "" ? null : Number(listed) })}
+          />
+        </div>
+        <div className="mb-5">
+          <FieldLabel>Estado</FieldLabel>
+          <div className="flex gap-2 mt-1.5 flex-wrap">
+            {SALE_ENTRY_STATUSES.map((s) => (
+              <Pill key={s} tone={saleStatusTone[s]} active={sale.status === s} onClick={() => onUpdate(sale.id, { status: s })}>
+                {s}
+              </Pill>
+            ))}
+          </div>
+        </div>
+        <button
+          onClick={() => onDelete(sale.id)}
+          className="w-full py-3 rounded-full text-sm font-semibold flex items-center justify-center gap-2"
+          style={{ background: C.peach.bg, color: C.peach.fg }}
+        >
+          <Trash2 size={15} /> Eliminar venta
+        </button>
+      </div>
+    </BottomSheet>
   );
 }
 
@@ -978,7 +1102,7 @@ function BudgetScreen({ sales, items, onBack }) {
 /* ---------------------------------------------------------------------- */
 /* ACTIVIDAD                                                              */
 /* ---------------------------------------------------------------------- */
-function ActivityScreen({ activity, members, onBack }) {
+function ActivityScreen({ activity, members, onBack, onDelete }) {
   const [f, setF] = useState("Todo");
   const filters = ["Todo", "objetos", "tareas", "cajas", "ventas"];
   const filtered = activity.filter((a) => f === "Todo" || a.type === f);
@@ -992,17 +1116,24 @@ function ActivityScreen({ activity, members, onBack }) {
       <div className="flex gap-2 px-5 overflow-x-auto pb-3" style={{ scrollbarWidth: "none" }}>
         {filters.map((x) => <Pill key={x} tone={C.grey} active={f === x} onClick={() => setF(x)}>{x === "Todo" ? "Todo" : x[0].toUpperCase() + x.slice(1)}</Pill>)}
       </div>
-      <div className="px-5 space-y-4 mt-2">
-        {filtered.map((a) => (
-          <div key={a.id} className="flex items-center gap-3">
-            <Avatar member={findMember(members, a.who)} size={30} />
-            <p className="text-sm flex-1" style={{ color: C.ink }}>
-              <span className="font-semibold">{a.who}</span> <span style={{ color: C.sub }}>{a.action}</span>
-            </p>
-            <span className="text-xs shrink-0" style={{ color: C.sub }}>{a.time}</span>
-          </div>
-        ))}
-      </div>
+      {filtered.length === 0 ? (
+        <EmptyState title="No hay actividad." subtitle="Cuando alguien haga cambios, los vas a ver acá." />
+      ) : (
+        <div className="px-5 space-y-4 mt-2">
+          {filtered.map((a) => (
+            <div key={a.id} className="flex items-center gap-3">
+              <Avatar member={findMember(members, a.who)} size={30} />
+              <p className="text-sm flex-1 min-w-0" style={{ color: C.ink }}>
+                <span className="font-semibold">{a.who}</span> <span style={{ color: C.sub }}>{a.action}</span>
+              </p>
+              <span className="text-xs shrink-0" style={{ color: C.sub }}>{a.time}</span>
+              <button onClick={() => onDelete(a.id)} className="shrink-0 p-1 rounded-full active:scale-90 transition-transform" aria-label="Eliminar">
+                <Trash2 size={14} style={{ color: C.sub }} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1010,7 +1141,7 @@ function ActivityScreen({ activity, members, onBack }) {
 /* ---------------------------------------------------------------------- */
 /* MÁS                                                                    */
 /* ---------------------------------------------------------------------- */
-function MoreScreen({ onNav, onOpenTeam, onEditTrip, onSignOut }) {
+function MoreScreen({ onNav, onOpenTeam, onEditTrip, onSignOut, onReset }) {
   const menu = [
     { key: "trip", label: "Editar viaje", icon: MapPin, tone: C.lilac },
     { key: "sales", label: "Para vender", icon: DollarSign, tone: C.peach },
@@ -1038,6 +1169,15 @@ function MoreScreen({ onNav, onOpenTeam, onEditTrip, onSignOut }) {
             <ChevronRight size={18} style={{ color: C.sub }} />
           </button>
         ))}
+        {onReset && (
+          <button onClick={onReset} className="w-full flex items-center gap-3 p-4 rounded-[20px]" style={{ background: C.card }}>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.peach.bg }}>
+              <Trash2 size={18} style={{ color: C.peach.fg }} />
+            </div>
+            <span className="flex-1 text-left text-sm font-semibold" style={{ color: C.peach.fg }}>Reiniciar todo</span>
+            <ChevronRight size={18} style={{ color: C.sub }} />
+          </button>
+        )}
         {onSignOut && (
           <button onClick={onSignOut} className="w-full flex items-center gap-3 p-4 rounded-[20px]" style={{ background: C.card }}>
             <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: C.grey.bg }}>
@@ -1048,6 +1188,29 @@ function MoreScreen({ onNav, onOpenTeam, onEditTrip, onSignOut }) {
         )}
       </div>
     </div>
+  );
+}
+
+function ResetConfirmSheet({ open, onClose, onConfirm, resetting }) {
+  return (
+    <BottomSheet open={open} onClose={onClose} title="Reiniciar todo">
+      <p className="text-sm mb-5" style={{ color: C.sub }}>
+        Esto borra todas las cosas, tareas, cajas, ventas y la actividad de esta mudanza. El equipo y los datos del viaje (origen, destino, fecha) se mantienen. Esta acción no se puede deshacer.
+      </p>
+      <div className="flex gap-2">
+        <button onClick={onClose} className="flex-1 py-3 rounded-full text-sm font-semibold" style={{ background: C.line, color: C.ink }}>
+          Cancelar
+        </button>
+        <button
+          disabled={resetting}
+          onClick={onConfirm}
+          className="flex-1 py-3 rounded-full text-sm font-bold"
+          style={{ background: C.peach.fg, color: "#fff", opacity: resetting ? 0.6 : 1 }}
+        >
+          {resetting ? "Reiniciando..." : "Sí, reiniciar"}
+        </button>
+      </div>
+    </BottomSheet>
   );
 }
 
@@ -1324,7 +1487,7 @@ function FAB({ onClick }) {
   );
 }
 
-function TopBar({ onOpenMenu, title = "Nuestra mudanza" }) {
+function TopBar({ onOpenMenu, onGoHome, title = "Nuestra mudanza" }) {
   return (
     <div
       className="sticky top-0 z-20 flex items-center gap-3 px-4"
@@ -1333,7 +1496,9 @@ function TopBar({ onOpenMenu, title = "Nuestra mudanza" }) {
       <button onClick={onOpenMenu} className="p-2 -ml-2 rounded-full active:scale-95 transition-transform" aria-label="Abrir menú">
         <Menu size={22} style={{ color: C.ink }} />
       </button>
-      <span className="text-sm font-bold" style={{ color: C.ink }}>{title}</span>
+      <button onClick={onGoHome} className="text-sm font-bold active:opacity-60 transition-opacity" style={{ color: C.ink }}>
+        {title}
+      </button>
     </div>
   );
 }
@@ -1355,7 +1520,9 @@ function SidebarMenu({ open, onClose, tab, setTab }) {
         style={{ width: 260, background: C.card, boxShadow: "8px 0 30px rgba(0,0,0,0.12)" }}
       >
         <div className="flex items-center justify-between px-5 mb-6">
-          <span className="text-base font-extrabold" style={{ color: C.ink }}>Nuestra mudanza</span>
+          <button onClick={() => { setTab("home"); onClose(); }} className="text-base font-extrabold active:opacity-60 transition-opacity" style={{ color: C.ink }}>
+            Nuestra mudanza
+          </button>
           <button onClick={onClose} className="p-1.5 rounded-full" style={{ background: C.line }}><X size={16} /></button>
         </div>
         <div className="flex flex-col gap-1 px-3">
@@ -1405,6 +1572,10 @@ export default function App() {
   const [addStep, setAddStep] = useState("menu");
   const [boxDetail, setBoxDetail] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [saleDetail, setSaleDetail] = useState(null);
+  const [taskDetail, setTaskDetail] = useState(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [moreScreen, setMoreScreen] = useState(null); // sales | budget | night | papers | activity
   const [nightChecked, setNightChecked] = useState({});
   const [papersChecked, setPapersChecked] = useState({});
@@ -1510,6 +1681,54 @@ export default function App() {
   };
 
 
+  const updateSale = async (id, patch) => {
+    setSales((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    setSaleDetail((prev) => (prev && prev.id === id ? { ...prev, ...patch } : prev));
+    const { error } = await supabase.from("sales").update(patch).eq("id", id);
+    if (error) { console.error("Error actualizando venta:", error); alert("No se pudo guardar: " + error.message); return; }
+    if (patch.status === "Vendido") {
+      const s = sales.find((x) => x.id === id);
+      if (s) logActivity(meName, `vendió ${s.item}${patch.listed ? ` por $${patch.listed.toLocaleString("es-AR")}` : ""}`, "ventas");
+    }
+  };
+  const deleteSale = async (id) => {
+    setSales((prev) => prev.filter((s) => s.id !== id));
+    setSaleDetail(null);
+    await supabase.from("sales").delete().eq("id", id);
+  };
+
+  const updateTask = async (id, patch) => {
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+    setTaskDetail((prev) => (prev && prev.id === id ? { ...prev, ...patch } : prev));
+    const { error } = await supabase.from("tasks").update(patch).eq("id", id);
+    if (error) { console.error("Error actualizando tarea:", error); alert("No se pudo guardar: " + error.message); }
+  };
+  const deleteTask = async (id) => {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    setTaskDetail(null);
+    await supabase.from("tasks").delete().eq("id", id);
+  };
+
+  const deleteActivity = async (id) => {
+    setActivity((prev) => prev.filter((a) => a.id !== id));
+    await supabase.from("activity").delete().eq("id", id);
+  };
+
+  const resetAllData = async () => {
+    setResetting(true);
+    await Promise.all([
+      supabase.from("items").delete().eq("household_id", householdId),
+      supabase.from("tasks").delete().eq("household_id", householdId),
+      supabase.from("boxes").delete().eq("household_id", householdId),
+      supabase.from("sales").delete().eq("household_id", householdId),
+      supabase.from("activity").delete().eq("household_id", householdId),
+    ]);
+    setItems([]); setTasks([]); setBoxes([]); setSales([]); setActivity([]);
+    setSelectedItem(null); setSaleDetail(null); setTaskDetail(null); setBoxDetail(null);
+    setResetting(false);
+    setResetOpen(false);
+  };
+
   const toggleTask = async (id) => {
     const t = tasks.find((x) => x.id === id);
     if (!t) return;
@@ -1567,9 +1786,14 @@ export default function App() {
     logActivity(meName, `agregó a ${name} al equipo`, "equipo");
   };
 
-  const saveTrip = async ({ origin, destination, movingDate }) => {
+  const saveTrip = async ({ origin, destination, movingDate, movingDateLabel }) => {
     const iso = movingDate.toISOString().slice(0, 10);
-    await supabase.from("households").update({ origin, destination, moving_date: iso }).eq("id", householdId);
+    // Actualizamos el estado local ya mismo: si la tabla "households" no tiene
+    // Realtime habilitado en Supabase, antes el cambio se guardaba pero no
+    // se veía reflejado en la app hasta recargar.
+    setProject((prev) => ({ ...prev, origin, destination, movingDate: iso, movingDateLabel }));
+    const { error } = await supabase.from("households").update({ origin, destination, moving_date: iso }).eq("id", householdId);
+    if (error) { console.error("Error guardando el viaje:", error); alert("No se pudo guardar: " + error.message); }
   };
 
   const pickWho = (id) => {
@@ -1583,7 +1807,7 @@ export default function App() {
     await supabase.auth.signOut();
   };
 
-  const goMore = (screen) => setMoreScreen(screen);
+  const goMore = (screen) => { setTab("more"); setMoreScreen(screen); };
   const backFromMore = () => setMoreScreen(null);
 
   /* --- pantallas de carga / acceso --- */
@@ -1621,25 +1845,26 @@ export default function App() {
     <div className="relative w-full min-h-screen" style={{ background: C.bg, fontFamily: FONT }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');`}</style>
 
-      <TopBar onOpenMenu={() => setMenuOpen(true)} />
+      <TopBar onOpenMenu={() => setMenuOpen(true)} onGoHome={() => setTab("home")} />
 
       <div className="w-full max-w-2xl mx-auto pb-20">
         {tab === "home" && (
           <HomeScreen
-            project={project} items={items} tasks={tasks} boxes={boxes} activity={activity} members={members}
+            project={project} items={items} tasks={tasks} boxes={boxes} sales={sales} activity={activity} members={members}
             onSeeTasks={() => setTab("tasks")} onSeeThings={() => setTab("things")} onOpenTeam={() => setTeamOpen(true)}
             onEditTrip={() => setTripOpen(true)} onToggleTask={toggleTask}
+            onOpenDecisionCenter={() => setDecisionCenterOpen(true)} onGoSales={() => goMore("sales")} onGoBoxes={() => setTab("boxes")}
           />
         )}
         {tab === "things" && (
           <ThingsScreen items={items} onOpenAdd={() => openAdd("item")} onDecisionCenter={() => setDecisionCenterOpen(true)} onOpenItem={setSelectedItem} />
         )}
-        {tab === "tasks" && <TasksScreen tasks={tasks} members={members} onToggle={toggleTask} meName={meName} />}
+        {tab === "tasks" && <TasksScreen tasks={tasks} members={members} onToggle={toggleTask} onOpenTask={setTaskDetail} meName={meName} />}
         {tab === "boxes" && <BoxesScreen boxes={boxes} members={members} onOpenBox={setBoxDetail} />}
-        {tab === "more" && !moreScreen && <MoreScreen onNav={goMore} onOpenTeam={() => setTeamOpen(true)} onEditTrip={() => setTripOpen(true)} onSignOut={signOut} />}
-        {tab === "more" && moreScreen === "sales" && <SalesScreen sales={sales} items={items} onBack={backFromMore} onOpenAdd={() => openAdd("sale")} />}
+        {tab === "more" && !moreScreen && <MoreScreen onNav={goMore} onOpenTeam={() => setTeamOpen(true)} onEditTrip={() => setTripOpen(true)} onSignOut={signOut} onReset={() => setResetOpen(true)} />}
+        {tab === "more" && moreScreen === "sales" && <SalesScreen sales={sales} items={items} onBack={backFromMore} onOpenAdd={() => openAdd("sale")} onOpenItem={setSelectedItem} onOpenSale={setSaleDetail} />}
         {tab === "more" && moreScreen === "budget" && <BudgetScreen sales={sales} items={items} onBack={backFromMore} />}
-        {tab === "more" && moreScreen === "activity" && <ActivityScreen activity={activity} members={members} onBack={backFromMore} />}
+        {tab === "more" && moreScreen === "activity" && <ActivityScreen activity={activity} members={members} onBack={backFromMore} onDelete={deleteActivity} />}
         {tab === "more" && moreScreen === "night" && (
           <ChecklistScreen title="Primera noche" subtitle="Lo esencial, a mano, desde el minuto uno." items={primeraNocheItems} checked={nightChecked} onToggle={(k) => setNightChecked((p) => ({ ...p, [k]: !p[k] }))} onBack={backFromMore} tone={C.lilac} />
         )}
@@ -1669,6 +1894,9 @@ export default function App() {
       />
       <BoxDetail box={boxDetail} members={members} onClose={() => setBoxDetail(null)} />
       <ItemDetailSheet item={selectedItem} onClose={() => setSelectedItem(null)} onDecide={decide} onDelete={deleteItem} onUpdateDetails={updateItemDetails} />
+      <SaleDetailSheet sale={saleDetail} onClose={() => setSaleDetail(null)} onUpdate={updateSale} onDelete={deleteSale} />
+      <TaskDetailSheet task={taskDetail} onClose={() => setTaskDetail(null)} onUpdate={updateTask} onToggle={toggleTask} onDelete={deleteTask} />
+      <ResetConfirmSheet open={resetOpen} onClose={() => setResetOpen(false)} onConfirm={resetAllData} resetting={resetting} />
     </div>
   );
 }
