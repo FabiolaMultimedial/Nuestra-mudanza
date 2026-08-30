@@ -298,14 +298,11 @@ function PillPicker({ options, value, onChange }) {
 /* ---------------------------------------------------------------------- */
 /* HOME                                                                    */
 /* ---------------------------------------------------------------------- */
-function HomeScreen({ project, items, tasks, boxes, sales, activity, members, onSeeTasks, onSeeThings, onOpenTeam, onEditTrip, onToggleTask, onOpenDecisionCenter, onGoSales, onGoBoxes }) {
-  const daysLeft = Math.max(0, Math.ceil((new Date(project.movingDate + "T00:00:00") - new Date()) / 86400000));
+function HomeScreen({ project, items, tasks, boxes, activity, members, onSeeTasks, onSeeThings, onOpenTeam, onEditTrip, onToggleTask }) {
+  const daysLeft = Math.max(0, Math.ceil((new Date(project.movingDate) - new Date()) / 86400000));
   const decided = items.filter((i) => i.decision !== "Sin decidir").length;
   const doneTasks = tasks.filter((t) => t.done).length;
   const readyBoxes = boxes.filter((b) => b.status === "Cerrada" || b.status === "Transportada").length;
-  const toDecideCount = items.filter((i) => i.decision === "Sin decidir").length;
-  const toSellCount = items.filter((i) => i.decision === "Vender").length + sales.length;
-  const toKeepCount = items.filter((i) => i.decision === "Me llevo").length;
   const pct = Math.round(((decided / Math.max(1, items.length)) + (doneTasks / Math.max(1, tasks.length)) + (readyBoxes / Math.max(1, boxes.length))) / 3 * 100);
   const nextTasks = tasks.filter((t) => !t.done).slice(0, 2);
   const suggestPending = items.length - decided;
@@ -329,24 +326,23 @@ function HomeScreen({ project, items, tasks, boxes, sales, activity, members, on
         </button>
       </div>
 
-      {/* accesos directos */}
+      {/* hero photos */}
       <div className="mt-6 px-5 flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
         {[
-          { key: "decidir", label: "Decidir", icon: HelpCircle, tone: C.grey, count: toDecideCount, onClick: onOpenDecisionCenter },
-          { key: "vender", label: "Vender", icon: DollarSign, tone: C.peach, count: toSellCount, onClick: onGoSales },
-          { key: "llevar", label: "Llevar", icon: Heart, tone: C.mint, count: toKeepCount, onClick: onSeeThings },
-          { key: "cajas", label: "Cajas", icon: BoxIcon, tone: C.sky, count: boxes.length, onClick: onGoBoxes },
-        ].map((s) => (
-          <button
-            key={s.key}
-            onClick={s.onClick}
-            className="shrink-0 w-24 flex flex-col items-center gap-2 py-4 rounded-[22px] active:scale-95 transition-transform"
-            style={{ background: s.tone.bg }}
-          >
-            <s.icon size={20} style={{ color: s.tone.fg }} />
-            <span className="text-sm font-bold" style={{ color: s.tone.fg }}>{s.label}</span>
-            <span className="text-[11px] font-semibold" style={{ color: s.tone.fg, opacity: 0.75 }}>{s.count}</span>
-          </button>
+          { key: "sofa", tag: "Decidir", tone: C.grey },
+          { key: "desk", tag: "Vender", tone: C.peach },
+          { key: "coffee", tag: "Llevar", tone: C.mint },
+          { key: "box1", tag: "Empacado", tone: C.sky },
+        ].map((p, idx) => (
+          <div key={p.key} className="relative shrink-0" style={{ marginTop: idx % 2 ? 14 : 0 }}>
+            <img src={photoUrl(p.key, 220, 220)} alt="" className="w-28 h-32 object-cover rounded-[22px]" />
+            <span
+              className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap"
+              style={{ background: p.tone.solid, color: "#fff" }}
+            >
+              {p.tag}
+            </span>
+          </div>
         ))}
       </div>
 
@@ -437,10 +433,12 @@ function HomeScreen({ project, items, tasks, boxes, sales, activity, members, on
 /* EDITAR VIAJE                                                            */
 /* ---------------------------------------------------------------------- */
 function EditTripSheet({ open, onClose, project, onSave }) {
-  // project.movingDate ya viene como "YYYY-MM-DD" (columna `date` de Postgres),
-  // así que lo usamos directo. Convertirlo a Date y volver con toISOString()
-  // restaba horas por el huso horario y mostraba un día menos en Argentina.
-  const toInputDate = (d) => (typeof d === "string" ? d.slice(0, 10) : new Date(d).toISOString().slice(0, 10));
+  const toInputDate = (d) => {
+    const dt = new Date(d);
+    const off = dt.getTimezoneOffset();
+    const local = new Date(dt.getTime() - off * 60000);
+    return local.toISOString().slice(0, 10);
+  };
   const [origin, setOrigin] = useState(project.origin);
   const [destination, setDestination] = useState(project.destination);
   const [date, setDate] = useState(toInputDate(project.movingDate));
@@ -1326,7 +1324,7 @@ function FAB({ onClick }) {
   );
 }
 
-function TopBar({ onOpenMenu, onGoHome, title = "Nuestra mudanza" }) {
+function TopBar({ onOpenMenu, title = "Nuestra mudanza" }) {
   return (
     <div
       className="sticky top-0 z-20 flex items-center gap-3 px-4"
@@ -1335,9 +1333,7 @@ function TopBar({ onOpenMenu, onGoHome, title = "Nuestra mudanza" }) {
       <button onClick={onOpenMenu} className="p-2 -ml-2 rounded-full active:scale-95 transition-transform" aria-label="Abrir menú">
         <Menu size={22} style={{ color: C.ink }} />
       </button>
-      <button onClick={onGoHome} className="text-sm font-bold active:opacity-60 transition-opacity" style={{ color: C.ink }}>
-        {title}
-      </button>
+      <span className="text-sm font-bold" style={{ color: C.ink }}>{title}</span>
     </div>
   );
 }
@@ -1359,9 +1355,7 @@ function SidebarMenu({ open, onClose, tab, setTab }) {
         style={{ width: 260, background: C.card, boxShadow: "8px 0 30px rgba(0,0,0,0.12)" }}
       >
         <div className="flex items-center justify-between px-5 mb-6">
-          <button onClick={() => { setTab("home"); onClose(); }} className="text-base font-extrabold active:opacity-60 transition-opacity" style={{ color: C.ink }}>
-            Nuestra mudanza
-          </button>
+          <span className="text-base font-extrabold" style={{ color: C.ink }}>Nuestra mudanza</span>
           <button onClick={onClose} className="p-1.5 rounded-full" style={{ background: C.line }}><X size={16} /></button>
         </div>
         <div className="flex flex-col gap-1 px-3">
@@ -1573,14 +1567,9 @@ export default function App() {
     logActivity(meName, `agregó a ${name} al equipo`, "equipo");
   };
 
-  const saveTrip = async ({ origin, destination, movingDate, movingDateLabel }) => {
+  const saveTrip = async ({ origin, destination, movingDate }) => {
     const iso = movingDate.toISOString().slice(0, 10);
-    // Actualizamos el estado local ya mismo: si la tabla "households" no tiene
-    // Realtime habilitado en Supabase, antes el cambio se guardaba pero no
-    // se veía reflejado en la app hasta recargar.
-    setProject((prev) => ({ ...prev, origin, destination, movingDate: iso, movingDateLabel }));
-    const { error } = await supabase.from("households").update({ origin, destination, moving_date: iso }).eq("id", householdId);
-    if (error) { console.error("Error guardando el viaje:", error); alert("No se pudo guardar: " + error.message); }
+    await supabase.from("households").update({ origin, destination, moving_date: iso }).eq("id", householdId);
   };
 
   const pickWho = (id) => {
@@ -1594,7 +1583,7 @@ export default function App() {
     await supabase.auth.signOut();
   };
 
-  const goMore = (screen) => { setTab("more"); setMoreScreen(screen); };
+  const goMore = (screen) => setMoreScreen(screen);
   const backFromMore = () => setMoreScreen(null);
 
   /* --- pantallas de carga / acceso --- */
@@ -1632,15 +1621,14 @@ export default function App() {
     <div className="relative w-full min-h-screen" style={{ background: C.bg, fontFamily: FONT }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');`}</style>
 
-      <TopBar onOpenMenu={() => setMenuOpen(true)} onGoHome={() => setTab("home")} />
+      <TopBar onOpenMenu={() => setMenuOpen(true)} />
 
       <div className="w-full max-w-2xl mx-auto pb-20">
         {tab === "home" && (
           <HomeScreen
-            project={project} items={items} tasks={tasks} boxes={boxes} sales={sales} activity={activity} members={members}
+            project={project} items={items} tasks={tasks} boxes={boxes} activity={activity} members={members}
             onSeeTasks={() => setTab("tasks")} onSeeThings={() => setTab("things")} onOpenTeam={() => setTeamOpen(true)}
             onEditTrip={() => setTripOpen(true)} onToggleTask={toggleTask}
-            onOpenDecisionCenter={() => setDecisionCenterOpen(true)} onGoSales={() => goMore("sales")} onGoBoxes={() => setTab("boxes")}
           />
         )}
         {tab === "things" && (
